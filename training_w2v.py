@@ -31,7 +31,7 @@ tokenizer = nlp.Tokenizer(oov_token='<UNK>')
 tokenizer.fit(docs)
 
 docs = tokenizer.transform(docs)
-vocab_size = len(tokenizer.word_index)
+vocab_size = len(tokenizer.word_index)+1
 
 print("Creating the model... {}".format(datetime.datetime.time(datetime.datetime.now())))
 w2v = nlp.Word2Vec(vocab_size,embedding_dim,device=torch.device('cuda:0'))
