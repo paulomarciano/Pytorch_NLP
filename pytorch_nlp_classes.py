@@ -7,6 +7,15 @@ import torch.optim as optim
 from tqdm import tqdm
 
 class Tokenizer():
+    """
+    General purpose, simple, and naive tokenizer. Takes a string as splits it
+    into words based on whitespace.
+    param char_level: If True, every char is a token.
+    param vocab_size: Keeps this many words, ordered by frequency.
+    param oov_token: String used to represent out of vocabulary words.
+    param filters: a string in which every char is to be filtered out of the
+    text.
+    """
     def __init__(self,
                  char_level=False,
                  vocab_size=None,
@@ -21,6 +30,9 @@ class Tokenizer():
         self.index_to_word = {}
 
     def fit(self,texts):
+        """
+        Fits the tokenizer. Allows it to build its internal dictionary.
+        """
         for text in texts:
             if self.char_level:
                 seq = text.lower()
@@ -41,6 +53,10 @@ class Tokenizer():
             self.index_to_word[len(self.word_index)+1] = self.oov_token
 
     def transform(self,texts):
+        """
+        Using the dictionaries built above, this transforms a sentence in a
+        sequence of tokens.
+        """
         tokenized = []
         for text in texts:
             if self.char_level:
@@ -65,12 +81,22 @@ class Tokenizer():
         return tokenized
 
     def text_to_words(self,text):
+        """
+        Helper function. You shouldn't be calling this, but this breaks up a
+        text by whitespace.
+        """
         new_text = text
         for item in self.filters:
             new_text = new_text.replace(str(item),'')
         return new_text.split()
 
 class Word2Vec(nn.Module):
+    """
+    Word2Vec class. Includes training via the skipgram method.
+    param vocab_size: number of words in the vocabulary.
+    param embedding_dim: dimension of the embedding vector.
+    param device: device the model is built on, defaults to CPU.
+    """
     def __init__(self,vocab_size,embedding_dim,device=torch.device('cpu')):
         super(Word2Vec,self).__init__()
         self.device = device
@@ -80,6 +106,11 @@ class Word2Vec(nn.Module):
         self.output.to(device)
 
     def forward(self,words,contexts):
+        """
+        Forward pass through the model.
+        param words: target words in the skipgram model.
+        param contexts: candidate context words in the skipgram model.
+        """
         words_tensor = self.embedding(words)
         contexts_tensor = self.embedding(contexts)
         similarity = F.cosine_similarity(words_tensor, contexts_tensor,dim=1)
@@ -88,9 +119,19 @@ class Word2Vec(nn.Module):
         return out
 
     def represent(self,word):
+        """
+        Gives the vector representation of a word.
+        param word: word to be represented.
+        """
         return self.embedding(word)
 
     def similarity(self,w1,w2):
+        """
+        Calculates cosine similarity between two words, according to the model.
+        The larger this is, more 'alike' are the words.
+        param w1: first word of the cosine similarity
+        param w2: second word of the cosine similarity
+        """
         words_tensor = self.embedding(w1)
         contexts_tensor = self.embedding(w2)
         similarity = F.cosine_similarity(words_tensor.view(-1), contexts_tensor.view(-1),dim=0)
@@ -104,6 +145,17 @@ class Word2Vec(nn.Module):
             epochs,
             optimizer,
             loss_function=nn.BCELoss(size_average=False)):
+        """
+        fits the Word2Vec model, according to the skipgram method.
+        param words: target words.
+        param contexts: candidate context words.
+        param targets: binary classification for contexts.
+        param batch_size: batch size to train on.
+        param epochs: how many epochs to train.
+        param optimizer: torch optimizer to use during training.
+        param loss_function: loss function to use. Defaults to binary
+        crossentropy.
+        """
         history = []
         for _ in tqdm(range(epochs)):
             total_loss = torch.Tensor([0])
@@ -133,17 +185,42 @@ class Word2Vec(nn.Module):
              contexts,
              targets,
              loss_function=nn.BCELoss(size_average=False)):
+        """
+        Helper method for OOF model evaluation.
+        param words: target words.
+        param contexts: candidate context words.
+        param target: binary classification targets for candidate contexts.
+        param loss_function: loss function to evaluate against.
+        """
 
-             return loss_function(preds,
-                                  torch.tensor(targets[i*batch_size:(i+1)*batch_size],
-                                               dtype=torch.float,
-                                               device=self.device)).item()
+        return loss_function(preds,
+                          torch.tensor(targets[i*batch_size:(i+1)*batch_size],
+                                       dtype=torch.float,
+                                       device=self.device)).item()
 
     def save_embedding(self,path):
+        """
+        Helper method for easy embedding layer serialization.
+        param path: file in which state_dict gets saved.
+        """
         torch.save(self.embedding.state_dict(),path)
         print("Saved the embedding layer's parameters in {}".format(path))
 
 class Seq2Seq(nn.Module):
+    """
+    Sequence to sequence model class in pytorch. Currently implements a
+    bidirectional, single layer, encoder and no attention mechanism.
+    TODO: implement multi layer encoders, attention mechanism.
+    param encoder_units: Size of encoding layer.
+    param vocab_size: How many words are there in the vocabulary.
+    param embedding_dim: Dimension of embedding layer.
+    param input_length: max length of input/output sequences.
+    param embedding_path: path to a serialized embedding layer, to ease transfer
+    learning. if None, the embedding layer will be trained from scratch.
+    param train_embedding: whether or not to include the embedding layer in
+    gradient updates. useful if using pre-trained embedding layers.
+    param device: torch device the model inhabits.
+    """
     def __init__(self,
                  encoder_units,
                  vocab_size,
@@ -177,6 +254,12 @@ class Seq2Seq(nn.Module):
         self.dense_layer.to(device)
 
     def forward(self,encoder_inputs, decoder_inputs):
+        """
+        Forward pass for training. Encodes a sequence and then decodes its
+        related target. Uses teacher forcing.
+        param encoder_inputs: input sequences.
+        param decoder_inputs: sequence to teacher force.
+        """
         encoder_embedded = self.embedding(encoder_inputs)
         decoder_embedded = self.embedding(decoder_inputs)
         encoded, encoded_states = self.encoder(encoder_embedded)
@@ -196,7 +279,20 @@ class Seq2Seq(nn.Module):
             optimizer,
             loss_function=F.nll_loss,
             size_average=False):
-
+        """
+        Training method.
+        param encoder_inputs: input sequences.
+        param decoder_inputs: sequences to teacher force.
+        param ground_truth: target sequences. Usually the decoder_inputs shifted
+        by one timestep.
+        param batch_size: batch size.
+        param epochs: number of training epochs.
+        param optimizer: torch optimizer to use for the training process.
+        param loss_function: loss function to be minimized. defaults to negative
+        log likelihood.
+        param size_average: whether or not to average each batch in
+        loss_function. Only affects the printouts.
+        """
         history=[]
         for _ in tqdm(range(epochs)):
             total_loss = torch.tensor([0],dtype=torch.float)
@@ -223,11 +319,20 @@ class Seq2Seq(nn.Module):
         return history
 
     def encode(self,sequence):
+        """
+        Method to encode an input sequence and pass the states to a decoder.
+        param sequence: input sequence.
+        """
         encoder_embedded = self.embedding(sequence)
         encoded, encoded_states = self.encoder(encoder_embedded)
         return encoded_states
 
     def decode(self,encoded_state):
+        """
+        Method to decode an input state into a response sequence.
+        param encoded_state: initial decoder state, contains information about
+        input sequence.
+        """
         state = encoded_state
         embedded = self.embedding(torch.tensor([0]))
         decoded_seq = []
@@ -243,7 +348,11 @@ class Seq2Seq(nn.Module):
         return decoded_seq
 
     def chat(self,tokenizer):
-        print("Hello, I'm a ChatBot. I've been trained to have a conversation. Let's talk.")
+        """
+        Human real-time testing method.
+        param tokenizer: a tokenizer to turn text into sequences.
+        """
+        print("You can input sequences here and have them be encoded-decoded by the model.")
         while True:
             sentence = input()
             response = self.decode(self.encode(tokenizer.transform([sentence])))
@@ -254,6 +363,12 @@ class Seq2Seq(nn.Module):
 
 
     def load_embedding(self,path,word_index):
+        """
+        Loads pre-trained embeddings of the format 'word <components>', like the
+        pretrained Stanford GloVe models.
+        param path: path to the file.
+        param word_index: dictionary mapping words to indexes.
+        """
         embeddings_index = {}
         with open(path,'r') as f:
             for line in f:
