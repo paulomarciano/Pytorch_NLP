@@ -48,13 +48,13 @@ if __name__ == "__main__":
         dec_seq[i].pop()
         dec_seq[i].insert(0,0)
 
-    s2s.fit(enc_seq,
-            dec_seq,
-            targets,
-            64,
-            100,
-            optimizer=optim.RMSprop(filter(lambda p: p.requires_grad,
-                                           s2s.parameters()),
-                                    lr=1e-3))
+    # s2s.fit(enc_seq,
+    #         dec_seq,
+    #         targets,
+    #         150,
+    #         1,
+    #         optimizer=optim.RMSprop(filter(lambda p: p.requires_grad,
+    #                                        s2s.parameters()),
+    #                                 lr=1e-3))
 
     s2s.chat(tokenizer)
