@@ -5,11 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import matplotlib.pyplot as plt
-import seaborn as sns
 from tqdm import tqdm
 from keras.preprocessing.sequence import skipgrams, make_sampling_table
-sns.set()
 
 embedding_dim = 100
 batch_size = 10000
@@ -42,7 +39,5 @@ history = w2v.fit(words,
                   batch_size,
                   epochs=epochs,
                   optimizer=optim.Adam(w2v.parameters(),lr=1e-3))
-
-plt.plot(history)
 
 w2v.save_embedding('./teste.pt')
