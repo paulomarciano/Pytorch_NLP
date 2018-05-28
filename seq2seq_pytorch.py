@@ -57,6 +57,6 @@ if __name__ == "__main__":
                                            s2s.parameters()),
                                     lr=1e-3))
 
-    torch.save(s2s.state_dict(), s2s.pt)
+    torch.save(s2s.state_dict(), 's2s.pt')
 
     s2s.chat(tokenizer)

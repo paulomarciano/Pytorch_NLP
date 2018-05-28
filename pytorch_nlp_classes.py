@@ -355,7 +355,9 @@ class Seq2Seq(nn.Module):
         print("You can input sequences here and have them be encoded-decoded by the model.")
         while True:
             sentence = input()
-            response = self.decode(self.encode(torch.tensor(tokenizer.transform([sentence]),dtype=torch.long,device=self.device)))
+            response = self.decode(self.encode(torch.tensor(tokenizer.transform([sentence]),
+                                                            dtype=torch.long,
+                                                            device=self.device)))
             words = []
             for item in response:
                 words.append(tokenizer.index_to_word[item])
