@@ -51,6 +51,8 @@ class Tokenizer():
         if self.oov_token is not None:
             self.word_index[self.oov_token] = len(self.word_index)+1
             self.index_to_word[len(self.word_index)+1] = self.oov_token
+        self.word_index['<SPECIAL>'] = 0
+        self.index_to_word[0] = '<SPECIAL>'
 
     def transform(self,texts):
         """
@@ -206,10 +208,17 @@ class Word2Vec(nn.Module):
         torch.save(self.embedding.state_dict(),path)
         print("Saved the embedding layer's parameters in {}".format(path))
 
+    def load_embedding(self,path):
+        """
+        Helper method for easy loading
+        """
+        self.embedding.load_state_dict(torch.load(path))
+        print("Loaded parameters contained in {}".format(path))
+
 class Seq2Seq(nn.Module):
     """
     Sequence to sequence model class in pytorch. Currently implements a
-    bidirectional, single layer, encoder and no attention mechanism.
+    bidirectional single layer encoder and no attention mechanism.
     TODO: implement multi layer encoders, attention mechanism.
     param encoder_units: Size of encoding layer.
     param vocab_size: How many words are there in the vocabulary.
@@ -238,8 +247,20 @@ class Seq2Seq(nn.Module):
                                bidirectional=True,
                                batch_first=True)
         self.encoder.to(device)
+        nn.init.orthogonal_(self.encoder.weight_hh_l0)
+        nn.init.xavier_uniform_(self.encoder.weight_ih_l0)
+        nn.init.orthogonal_(self.encoder.weight_hh_l0_reverse)
+        nn.init.xavier_uniform_(self.encoder.weight_ih_l0_reverse)
+        nn.init.normal_(self.encoder.bias_hh_l0,std=.01)
+        nn.init.normal_(self.encoder.bias_ih_l0,std=.01)
+        nn.init.normal_(self.encoder.bias_hh_l0_reverse,std=.01)
+        nn.init.normal_(self.encoder.bias_ih_l0_reverse,std=.01)
         self.decoder = nn.LSTM(embedding_dim,2*encoder_units,batch_first=True)
         self.decoder.to(device)
+        nn.init.orthogonal_(self.decoder.weight_hh_l0)
+        nn.init.xavier_uniform_(self.decoder.weight_ih_l0)
+        nn.init.normal_(self.decoder.bias_hh_l0,std=.01)
+        nn.init.normal_(self.decoder.bias_ih_l0,std=.01)
         self.vocab_size = vocab_size
         self.embedding = nn.Embedding(vocab_size,
                                       embedding_dim)
@@ -250,8 +271,12 @@ class Seq2Seq(nn.Module):
         self.embedding.to(device)
         if embedding_path is not None:
             self.embedding.load_state_dict(torch.load(path))
+        else:
+            nn.init.xavier_normal_(self.embedding.weight)
         self.dense_layer = nn.Linear(2*encoder_units,vocab_size)
         self.dense_layer.to(device)
+        nn.init.xavier_normal_(self.dense_layer.weight)
+        nn.init.normal_(self.dense_layer.bias,std=.01)
 
     def forward(self,encoder_inputs, decoder_inputs):
         """
@@ -360,7 +385,10 @@ class Seq2Seq(nn.Module):
                                                             device=self.device)))
             words = []
             for item in response:
-                words.append(tokenizer.index_to_word[item])
+                if item == 0:
+                    words.append('<EOS>')
+                else:
+                    words.append(tokenizer.index_to_word[item])
             print(' '.join(words))
 
 
