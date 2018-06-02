@@ -104,8 +104,11 @@ class Word2Vec(nn.Module):
         self.device = device
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.embedding.to(device)
+        nn.init.xavier_normal_(self.embedding.weight)
         self.output = nn.Linear(1, 1)
         self.output.to(device)
+        nn.init.xavier_normal_(self.output.weight)
+        nn.init.constant_(self.output.bias,0)
 
     def forward(self,words,contexts):
         """
@@ -220,6 +223,7 @@ class Seq2Seq(nn.Module):
     Sequence to sequence model class in pytorch. Currently implements a
     bidirectional single layer encoder and no attention mechanism.
     TODO: implement multi layer encoders, attention mechanism.
+    TODO: implement different embeddings for encoder and decoder.
     param encoder_units: Size of encoding layer.
     param vocab_size: How many words are there in the vocabulary.
     param embedding_dim: Dimension of embedding layer.
@@ -416,3 +420,18 @@ class Seq2Seq(nn.Module):
 
         self.embedding.weight.data.copy_(torch.from_numpy(embedding_matrix))
         print("Loaded embedding located in {}".format(path))
+
+    def summary(self):
+        for idx, m in enumerate(self.modules()):
+            print(idx, '->', m)
+            num_param = 0
+            num_train_param = 0
+            for p in m.parameters():
+                num_param += p.view(-1).shape[0]
+                if p.requires_grad:
+                    num_train_param += p.view(-1).shape[0]
+            print("Number of Parameters: {}".format(num_param))
+            print("Number of Trainable Parameters: {}".format(num_train_param))
+
+
+        return None

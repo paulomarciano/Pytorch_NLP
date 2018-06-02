@@ -26,16 +26,20 @@ if __name__ == "__main__":
         for line in f:
             train_dec_list.append(line.lower())
 
-    tokenizer = nlp.Tokenizer(vocab_size=40000, oov_token='<UNK>')
+    num_words = 10000
+
+    tokenizer = nlp.Tokenizer(vocab_size=num_words, oov_token='<UNK>')
     tokenizer.fit(np.hstack([train_enc_list,train_dec_list]))
 
-    s2s=nlp.Seq2Seq(128,
-                    len(tokenizer.word_index)+1,
+    s2s=nlp.Seq2Seq(64,
+                    num_words+1,
                     100,
                     40,
                     train_embedding=False,
                     device=torch.device('cuda:0'))
     s2s.load_embedding('./Cornell/glove.6B.100d.txt',tokenizer.word_index)
+
+    s2s.summary()
 
     # Preparing inputs and targets:
     enc_seq = tokenizer.transform(train_enc_list)
