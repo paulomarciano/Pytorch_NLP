@@ -32,7 +32,7 @@ if __name__ == "__main__":
     tokenizer.fit(np.hstack([train_enc_list,train_dec_list]))
 
     s2s=nlp.Seq2Seq(64,
-                    num_words+1,
+                    num_words+2,
                     100,
                     40,
                     train_embedding=False,
@@ -56,10 +56,10 @@ if __name__ == "__main__":
             dec_seq,
             targets,
             64,
-            100,
+            20,
             optimizer=optim.RMSprop(filter(lambda p: p.requires_grad,
                                            s2s.parameters()),
-                                    lr=2e-3))
+                                    lr=1e-3))
 
     torch.save(s2s.state_dict(), 's2s.pt')
 

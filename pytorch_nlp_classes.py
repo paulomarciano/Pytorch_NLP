@@ -46,7 +46,7 @@ class Tokenizer():
 
         self.word_index = {k[0]:i + 1 for i,k in enumerate(sorted(self.word_counts.items(),
                                                                  key= lambda x: x[1],
-                                                                 reverse=True))}
+                                                                 reverse=True)[:self.num_words])}
         self.index_to_word = {v:k for k,v in self.word_index.items()}
         if self.oov_token is not None:
             self.word_index[self.oov_token] = len(self.word_index)+1
@@ -411,9 +411,11 @@ class Seq2Seq(nn.Module):
                 coefs = np.asarray(values[1:], dtype='float32')
                 embeddings_index[word] = coefs
 
-        embedding_matrix = np.zeros((len(word_index) + 1, self.embedding_dim))
+        embedding_matrix = np.zeros((self.vocab_size, self.embedding_dim))
         for word, i in word_index.items():
             embedding_vector = embeddings_index.get(word)
+            if i >= self.vocab_size:
+                break
             if embedding_vector is not None:
                 # words not found in embedding index will be all-zeros.
                 embedding_matrix[i] = embedding_vector
