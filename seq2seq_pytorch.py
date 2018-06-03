@@ -26,7 +26,7 @@ if __name__ == "__main__":
         for line in f:
             train_dec_list.append(line.lower())
 
-    num_words = 50000
+    num_words = 5000
 
     tokenizer = nlp.Tokenizer(vocab_size=num_words, oov_token='<UNK>')
     tokenizer.fit(np.hstack([train_enc_list,train_dec_list]))
