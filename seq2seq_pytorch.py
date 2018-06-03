@@ -26,7 +26,7 @@ if __name__ == "__main__":
         for line in f:
             train_dec_list.append(line.lower())
 
-    num_words = 10000
+    num_words = 50000
 
     tokenizer = nlp.Tokenizer(vocab_size=num_words, oov_token='<UNK>')
     tokenizer.fit(np.hstack([train_enc_list,train_dec_list]))
@@ -56,10 +56,10 @@ if __name__ == "__main__":
             dec_seq,
             targets,
             64,
-            20,
+            100,
             optimizer=optim.RMSprop(filter(lambda p: p.requires_grad,
                                            s2s.parameters()),
-                                    lr=1e-3))
+                                    lr=5e-3))
 
     torch.save(s2s.state_dict(), 's2s.pt')
 

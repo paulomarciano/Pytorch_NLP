@@ -50,7 +50,7 @@ class Tokenizer():
         self.index_to_word = {v:k for k,v in self.word_index.items()}
         if self.oov_token is not None:
             self.word_index[self.oov_token] = len(self.word_index)+1
-            self.index_to_word[len(self.word_index)+1] = self.oov_token
+            self.index_to_word[self.num_words+1] = self.oov_token
         self.word_index['<SPECIAL>'] = 0
         self.index_to_word[0] = '<SPECIAL>'
 
