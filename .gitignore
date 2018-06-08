@@ -109,3 +109,4 @@ models/
 *.h5
 data/
 *.pt
+OpenSubtitles/
