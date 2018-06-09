@@ -33,7 +33,7 @@ class Tokenizer():
         """
         Fits the tokenizer. Allows it to build its internal dictionary.
         """
-        for text in texts:
+        for text in tqdm(texts):
             if self.char_level:
                 seq = text.lower()
             else:
@@ -48,6 +48,8 @@ class Tokenizer():
                                                                  key= lambda x: x[1],
                                                                  reverse=True)[:self.num_words])}
         self.index_to_word = {v:k for k,v in self.word_index.items()}
+        if self.num_words is None:
+            self.num_words = len(self.word_index)
         if self.oov_token is not None:
             self.word_index[self.oov_token] = len(self.word_index)+1
             self.index_to_word[self.num_words+1] = self.oov_token
@@ -236,11 +238,14 @@ class Seq2Seq(nn.Module):
     """
     def __init__(self,
                  encoder_units,
-                 vocab_size,
+                 vocab_size_in,
+                 vocab_size_out,
                  embedding_dim,
                  input_length,
-                 embedding_path=None,
-                 train_embedding=True,
+                 embedding_path_in=None,
+                 embedding_path_out=None,
+                 train_embedding_in=True,
+                 train_embedding_out=True,
                  device=torch.device('cpu')):
         super(Seq2Seq,self).__init__()
         self.device = device
@@ -265,19 +270,30 @@ class Seq2Seq(nn.Module):
         nn.init.xavier_uniform_(self.decoder.weight_ih_l0)
         nn.init.normal_(self.decoder.bias_hh_l0,std=.01)
         nn.init.normal_(self.decoder.bias_ih_l0,std=.01)
-        self.vocab_size = vocab_size
-        self.embedding = nn.Embedding(vocab_size,
+        self.vocab_size_in = vocab_size_in
+        self.vocab_size_out = vocab_size_out
+        self.encoder_embedding = nn.Embedding(vocab_size_in,
                                       embedding_dim)
-        if not train_embedding:
-            for param in self.embedding.parameters():
+        self.decoder_embedding = nn.Embedding(vocab_size_out,
+                                      embedding_dim)
+        if not train_embedding_in:
+            for param in self.encoder_embedding.parameters():
+                param.requires_grad = False
+        if not train_embedding_out:
+            for param in self.decoder_embedding.parameters():
                 param.requires_grad = False
         # self.embedding.weight.requires_grad = train_embedding
-        self.embedding.to(device)
-        if embedding_path is not None:
-            self.embedding.load_state_dict(torch.load(path))
+        self.encoder_embedding.to(device)
+        self.decoder_embedding.to(device)
+        if embedding_path_in is not None:
+            self.encoder_embedding.load_state_dict(torch.load(path))
         else:
-            nn.init.xavier_normal_(self.embedding.weight)
-        self.dense_layer = nn.Linear(2*encoder_units,vocab_size)
+            nn.init.xavier_normal_(self.encoder_embedding.weight)
+        if embedding_path_out is not None:
+            self.decoder_embedding.load_state_dict(torch.load(path))
+        else:
+            nn.init.xavier_normal_(self.decoder_embedding.weight)
+        self.dense_layer = nn.Linear(2*encoder_units,vocab_size_out)
         self.dense_layer.to(device)
         nn.init.xavier_normal_(self.dense_layer.weight)
         nn.init.normal_(self.dense_layer.bias,std=.01)
@@ -289,8 +305,8 @@ class Seq2Seq(nn.Module):
         param encoder_inputs: input sequences.
         param decoder_inputs: sequence to teacher force.
         """
-        encoder_embedded = self.embedding(encoder_inputs)
-        decoder_embedded = self.embedding(decoder_inputs)
+        encoder_embedded = self.encoder_embedding(encoder_inputs)
+        decoder_embedded = self.decoder_embedding(decoder_inputs)
         encoded, encoded_states = self.encoder(encoder_embedded)
 
         decoded, decoded_states = self.decoder(decoder_embedded,
@@ -352,7 +368,7 @@ class Seq2Seq(nn.Module):
         Method to encode an input sequence and pass the states to a decoder.
         param sequence: input sequence.
         """
-        encoder_embedded = self.embedding(sequence)
+        encoder_embedded = self.encoder_embedding(sequence)
         encoded, encoded_states = self.encoder(encoder_embedded)
         return encoded_states
 
@@ -363,9 +379,9 @@ class Seq2Seq(nn.Module):
         input sequence.
         """
         state = encoded_state
-        embedded = self.embedding(torch.tensor([0],device=self.device))
+        embedded = self.decoder_embedding(torch.tensor([0],device=self.device))
         decoded_seq = []
-        decoded_token = torch.tensor([self.vocab_size+1])
+        decoded_token = torch.tensor([self.vocab_size_out+1])
         while (decoded_token != 0) and (len(decoded_seq) < self.input_length):
             decoded, state = self.decoder(embedded.view(1,1,-1),
                                           (state[0].view(1,1,-1),
@@ -373,7 +389,7 @@ class Seq2Seq(nn.Module):
             log_probs = F.log_softmax(self.dense_layer(decoded),dim=2).view(-1)
             decoded_token = log_probs.max(0)[1]
             decoded_seq.append(decoded_token.item())
-            embedded = self.embedding(decoded_token)
+            embedded = self.decoder_embedding(decoded_token)
         return decoded_seq
 
     def chat(self,tokenizer):
@@ -396,13 +412,14 @@ class Seq2Seq(nn.Module):
             print(' '.join(words))
 
 
-    def load_embedding(self,path,word_index):
+    def load_embedding(self,path,word_index,which='both'):
         """
         Loads pre-trained embeddings of the format 'word <components>', like the
         pretrained Stanford GloVe models.
         param path: path to the file.
         param word_index: dictionary mapping words to indexes.
         """
+        assert(which in ['both','encoder','decoder'])
         embeddings_index = {}
         with open(path,'r') as f:
             for line in f:
@@ -410,18 +427,30 @@ class Seq2Seq(nn.Module):
                 word = values[0]
                 coefs = np.asarray(values[1:], dtype='float32')
                 embeddings_index[word] = coefs
+        if which == 'encoder':
+            vocab_size = self.vocab_size_in
+        elif which == 'decoder':
+            vocab_size = self.vocab_size_out
+        else:
+            vocab_size = max(self.vocab_size_in, self.vocab_size_out)
 
-        embedding_matrix = np.zeros((self.vocab_size, self.embedding_dim))
+        embedding_matrix = np.zeros((vocab_size, self.embedding_dim))
         for word, i in word_index.items():
             embedding_vector = embeddings_index.get(word)
-            if i >= self.vocab_size:
+            if i >= vocab_size:
                 break
             if embedding_vector is not None:
                 # words not found in embedding index will be all-zeros.
                 embedding_matrix[i] = embedding_vector
 
-        self.embedding.weight.data.copy_(torch.from_numpy(embedding_matrix))
-        print("Loaded embedding located in {}".format(path))
+        if which == 'encoder':
+            self.encoder_embedding.weight.data.copy_(torch.from_numpy(embedding_matrix))
+        elif which == 'decoder':
+            self.decoder_embedding.weight.data.copy_(torch.from_numpy(embedding_matrix))
+        elif which == 'both':
+            self.encoder_embedding.weight.data.copy_(torch.from_numpy(embedding_matrix))
+            self.decoder_embedding.weight.data.copy_(torch.from_numpy(embedding_matrix))
+        print("Loaded {} embedding(s) located in {}".format(which,path))
 
     def summary(self):
         for idx, m in enumerate(self.modules()):
