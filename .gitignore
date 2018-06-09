@@ -104,7 +104,7 @@ venv.bak/
 .mypy_cache/
 
 # Big things
-Cornell/glove.*
+Cornell/glove*
 models/
 *.h5
 data/
